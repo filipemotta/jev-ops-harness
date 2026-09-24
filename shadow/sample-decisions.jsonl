@@ -1,0 +1,10 @@
+{"case": "incident-triage", "model_choice": "database", "model_confidence": 0.86, "human_choice": "database"}
+{"case": "incident-triage", "model_choice": "application", "model_confidence": 0.91, "human_choice": "application"}
+{"case": "incident-triage", "model_choice": "network", "model_confidence": 0.62, "human_choice": "platform"}
+{"case": "incident-triage", "model_choice": "platform", "model_confidence": 0.44, "human_choice": "network"}
+{"case": "incident-triage", "model_choice": "database", "model_confidence": 0.79, "human_choice": "database"}
+{"case": "ci-failure", "model_choice": "credential", "model_confidence": 0.93, "human_choice": "credential"}
+{"case": "ci-failure", "model_choice": "code", "model_confidence": 0.88, "human_choice": "code"}
+{"case": "ci-failure", "model_choice": "dependency", "model_confidence": 0.57, "human_choice": "runner"}
+{"case": "ci-failure", "model_choice": "runner", "model_confidence": 0.41, "human_choice": "dependency"}
+{"case": "ci-failure", "model_choice": "credential", "model_confidence": 0.82, "human_choice": "credential"}

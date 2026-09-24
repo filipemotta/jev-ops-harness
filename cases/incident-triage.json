@@ -1,0 +1,61 @@
+{
+  "model": "jev-latest",
+  "state": {
+    "alert": {
+      "name": "HighErrorRate",
+      "service": "checkout-api",
+      "summary": "5xx ratio above 8% for 10 minutes on checkout-api (eu-west-1)"
+    },
+    "evidence": {
+      "error_samples": [
+        "upstream connect error or disconnect/reset before headers. reset reason: connection failure",
+        "dial tcp 10.42.7.15:5432: i/o timeout",
+        "context deadline exceeded while waiting for connection from pool"
+      ],
+      "recent_changes": [
+        "checkout-api v2.31.0 deployed 14 minutes before the alert (config-only change: pool size 20 -> 50)",
+        "no node group or CNI changes in the last 24 hours"
+      ],
+      "node_events": [],
+      "database": "RDS PostgreSQL primary shows connections at 100% of max_connections since the deploy"
+    }
+  },
+  "questions": {
+    "domain": {
+      "type": "choice",
+      "instructions": "Which team should own the first investigation of this incident, based only on the evidence provided?",
+      "criteria": {
+        "network": "Packet loss, DNS failures, load balancer or CNI problems between healthy components",
+        "platform": "Node, scheduler, autoscaler or cluster control plane problems",
+        "database": "The database itself is saturated, unavailable or slow, including connection exhaustion",
+        "application": "A code or configuration change in the service caused the failure",
+        "unknown": "The evidence does not point to one team"
+      }
+    },
+    "severity": {
+      "type": "score",
+      "instructions": "How severe is the customer impact described in the alert and evidence?",
+      "criteria": [
+        "Degraded for a few users, no revenue path affected",
+        "Partial outage on a revenue path",
+        "Full outage on a revenue path"
+      ]
+    },
+    "deploy_correlated": {
+      "type": "noul",
+      "instructions": "Does `evidence.recent_changes` describe a change to the affected service shortly before the alert started?",
+      "criteria": {
+        "true": "A deploy, config or release of the affected service happened minutes before the alert",
+        "false": "No change to the affected service is listed, or the change is unrelated"
+      }
+    },
+    "needs_more_evidence": {
+      "type": "noul",
+      "instructions": "Is the evidence too thin to choose a team, so that more data should be collected before routing?",
+      "criteria": {
+        "true": "No error samples, no recent change and no infrastructure signal are listed",
+        "false": "Error samples or a correlated change point to a specific team"
+      }
+    }
+  }
+}

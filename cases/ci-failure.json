@@ -1,0 +1,50 @@
+{
+  "model": "jev-latest",
+  "state": {
+    "job": {
+      "workflow": "build-and-push",
+      "step": "docker push",
+      "exit_code": 1,
+      "runner": "ubuntu-latest (GitHub-hosted)",
+      "attempt": 1
+    },
+    "log_tail": [
+      "The push refers to repository [123456789012.dkr.ecr.eu-west-1.amazonaws.com/checkout-api]",
+      "denied: Your authorization token has expired. Reauthenticate and try again.",
+      "Error: Process completed with exit code 1."
+    ],
+    "changed_files": [
+      "src/checkout/cart.py",
+      "tests/test_cart.py"
+    ]
+  },
+  "questions": {
+    "failure_class": {
+      "type": "choice",
+      "instructions": "What is the most likely cause of this CI failure, based only on `log_tail` and `changed_files`?",
+      "criteria": {
+        "dependency": "A package, image or artifact could not be resolved, downloaded or built",
+        "credential": "A token, secret or permission was missing, expired or rejected",
+        "runner": "The runner ran out of disk, memory or time, or the job was cancelled by the platform",
+        "code": "A test, lint or compile step failed because of the changed files",
+        "unknown": "The log does not show enough to decide"
+      }
+    },
+    "retry_may_help": {
+      "type": "noul",
+      "instructions": "Would re-running the job without any change have a reasonable chance of passing?",
+      "criteria": {
+        "true": "The failure is an expired token, a transient network error or a runner interruption",
+        "false": "The failure is a failing test, a compile error or a missing dependency that a retry would hit again"
+      }
+    },
+    "touches_pipeline": {
+      "type": "noul",
+      "instructions": "Do the `changed_files` include CI or pipeline definitions such as workflow, Dockerfile or build configuration files?",
+      "criteria": {
+        "true": "A workflow, Dockerfile, Makefile or build configuration file is in the list",
+        "false": "Only application source or test files are in the list"
+      }
+    }
+  }
+}
