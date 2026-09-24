@@ -1,7 +1,6 @@
 # jev-ops-harness
 
-Companion repository for the article *Jev for Cloud and SRE Work: Where a
-Decision Model Fits Between Your Code and Your LLM*. It is a small Python
+Companion repository for the article *Your LLM Is Overqualified for Half Its Job: Jev for Cloud, DevOps and SRE Pipelines*. It is a small Python
 harness that shows the division of labor the article argues for: a decision
 model selects and classifies, an LLM investigates and writes, code validates
 and executes.
