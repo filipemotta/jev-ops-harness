@@ -88,3 +88,46 @@ class PolicyTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class StateFilterTest(unittest.TestCase):
+    """The input half of the guardrail: untrusted text never reaches the decision call."""
+
+    def setUp(self):
+        from jevops.state import build_incident_state, naive_incident_state
+        self.case = json.loads((CASES / "raw" / "incident-injected-log.json").read_text())
+        self.built = build_incident_state(self.case["raw_event"])
+        self.naive = naive_incident_state(self.case["raw_event"])
+
+    def test_injected_text_is_absent_from_built_state(self):
+        text = json.dumps(self.built).lower()
+        for phrase in ("automated triage", "network team", "packet loss", "commit", "runbook"):
+            self.assertNotIn(phrase, text)
+
+    def test_evidence_is_reduced_to_signatures(self):
+        sigs = self.built["evidence"]["error_signatures"]
+        self.assertIn("dial tcp :5432 i/o timeout", sigs)
+        self.assertIn("database connection limit reached", sigs)
+        self.assertLessEqual(len(sigs), 5)
+
+    def test_unfiltered_state_is_steered_past_the_confidence_floor(self):
+        # The point of the test: a steered pick clears the policy's confidence
+        # floor, so the output gate alone does not stop it.
+        answers = StubClient().evaluate(self.naive, self.case["questions"])["answers"]
+        self.assertEqual(answers["domain"]["choice"], "network")
+        self.assertEqual(POLICIES["incident-triage"](answers).outcome, ACT)
+
+    def test_built_state_routes_to_the_real_owner(self):
+        answers = StubClient().evaluate(self.built, self.case["questions"])["answers"]
+        self.assertEqual(answers["domain"]["choice"], "database")
+        self.assertEqual(answers["domain"]["probabilities"]["network"], 0.0)
+
+    def test_caps_hold_under_volume(self):
+        from jevops.state import MAX_CHARS, MAX_ITEMS, build_incident_state
+        event = {"alert": {"name": "x", "summary": "s" * 1000},
+                 "log_lines": [f"dial tcp 10.0.0.{i}:{5000 + i}: i/o timeout" for i in range(50)],
+                 "deploys": [{"service": "svc", "version": f"v{i}"} for i in range(50)]}
+        state = build_incident_state(event)
+        self.assertLessEqual(len(state["alert"]["summary"]), MAX_CHARS)
+        self.assertLessEqual(len(state["evidence"]["error_signatures"]), MAX_ITEMS)
+        self.assertLessEqual(len(state["evidence"]["recent_changes"]), MAX_ITEMS)

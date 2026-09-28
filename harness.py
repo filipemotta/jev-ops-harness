@@ -4,9 +4,13 @@
 Usage:
   python3 harness.py run cases/incident-triage.json            # offline stub
   python3 harness.py run cases/incident-triage.json --live     # real API (TYPESAFE_API_KEY)
+  python3 harness.py run cases/raw/incident-injected-log.json  # raw event, state built by jevops/state.py
+  python3 harness.py run cases/raw/incident-injected-log.json --unfiltered   # same event forwarded as-is
   python3 harness.py shadow shadow/sample-decisions.jsonl      # agreement report
 
-`run` prints the raw answers and the policy decision. `shadow` reads a JSONL log
+`run` prints the raw answers and the policy decision. A case with a `raw_event`
+instead of a `state` goes through the state builder first; `--unfiltered`
+forwards the raw event instead, to show what the filter prevents. `shadow` reads a JSONL log
 of past decisions (model choice + confidence + what the human did) and reports
 agreement overall and per confidence bucket, which is how thresholds get tuned.
 """
@@ -19,14 +23,24 @@ from pathlib import Path
 
 from jevops.client import make_client
 from jevops.policy import POLICIES
+from jevops.state import BUILDERS, naive_incident_state
 
 
-def run(path: str, live: bool) -> int:
+def run(path: str, live: bool, unfiltered: bool = False) -> int:
     case = json.loads(Path(path).read_text())
-    name = Path(path).stem
+    name = case.get("policy", Path(path).stem)
+    if "raw_event" in case:
+        if unfiltered:
+            state = naive_incident_state(case["raw_event"])
+        else:
+            state = BUILDERS[name](case["raw_event"])
+        print(f"# state ({'unfiltered' if unfiltered else 'built by jevops/state.py'}):")
+        print(json.dumps(state, indent=2))
+    else:
+        state = case["state"]
     client = make_client(live)
-    response = client.evaluate(case["state"], case["questions"], case.get("model"))
-    print(f"# case: {name}  model: {response['model']}")
+    response = client.evaluate(state, case["questions"], case.get("model"))
+    print(f"# case: {Path(path).stem}  policy: {name}  model: {response['model']}")
     print(json.dumps(response["answers"], indent=2))
     policy = POLICIES.get(name)
     if policy is None:
@@ -65,11 +79,12 @@ def main() -> int:
     p_run = sub.add_parser("run")
     p_run.add_argument("case")
     p_run.add_argument("--live", action="store_true", help="call the real API instead of the stub")
+    p_run.add_argument("--unfiltered", action="store_true", help="forward a raw_event as-is (comparison only)")
     p_shadow = sub.add_parser("shadow")
     p_shadow.add_argument("log")
     args = parser.parse_args()
     if args.cmd == "run":
-        return run(args.case, args.live)
+        return run(args.case, args.live, args.unfiltered)
     return shadow(args.log)
 
 
