@@ -20,7 +20,9 @@ import urllib.error
 import urllib.request
 
 DEFAULT_BASE_URL = "https://api.typesafe.ai"
-DEFAULT_MODEL = "jev-latest"
+# Pinned, not the jev-latest alias: thresholds in policy.py are tuned against one
+# version. Move to a new one after replaying the corpus against it (harness.py replay).
+DEFAULT_MODEL = "jev-1.13.0"
 
 
 class HttpClient:

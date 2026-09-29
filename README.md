@@ -19,8 +19,10 @@ harness calls the real endpoint with one flag.
 | `jevops/state.py` | State builder: allowlisted fields, log lines reduced to error signatures, capped lists and strings |
 | `cases/raw/*.json` | Raw events (logs, deploys, commits) that go through the state builder before the call |
 | `jevops/policy.py` | Routing policy per case: act, review or escalate, with the confidence thresholds in one place |
+| `jevops/versioning.py` | `policy_version()`: one id for the rules behind a decision (thresholds, state builder, question criteria) |
 | `harness.py` | CLI: run a case, or produce a shadow-mode agreement report |
 | `shadow/sample-decisions.jsonl` | Synthetic log of model decisions next to what a human did, to show the report format |
+| `shadow/replay-corpus.jsonl` | Synthetic labeled corpus (state, recorded decision, versions, human label) for `replay` |
 | `tests/` | Offline tests: answer shapes match the documented API, policies route as intended |
 
 ## Run it
@@ -33,11 +35,13 @@ python3 harness.py run cases/ci-failure.json
 python3 harness.py run cases/action-gate.json
 python3 harness.py run cases/raw/incident-injected-log.json               # state built from a raw event
 python3 harness.py run cases/raw/incident-injected-log.json --unfiltered  # same event forwarded as-is
+python3 harness.py run cases/ci-failure.json --log decisions.jsonl         # append the decision record
 python3 harness.py shadow shadow/sample-decisions.jsonl
+python3 harness.py replay shadow/replay-corpus.jsonl --fail-on-flip       # what changed since the corpus was recorded
 python3 -m unittest discover -s tests -t .
 ```
 
-With an API key (`TYPESAFE_API_KEY`), add `--live` to call `jev-latest`:
+With an API key (`TYPESAFE_API_KEY`), add `--live` to call the pinned `jev-1.13.0`:
 
 ```bash
 export TYPESAFE_API_KEY=...
@@ -69,6 +73,38 @@ the decision call. It goes to the LLM downstream, where the action gate in
 `policy.py` sits after it. The stub makes the effect easy to see because it
 counts words; a real model is harder to steer, which is a reason to measure it
 in shadow mode, not a reason to skip the filter.
+
+## Version the rules, replay before you move them
+
+A typed answer is only as safe as the rules around it, and those rules change.
+What the team calls "flaky" or "credential" lives in the `criteria` text of each
+question, next to the thresholds in `policy.py` and the filter in `state.py`.
+All three are policy. The harness treats them that way.
+
+The model is pinned to `jev-1.13.0`, not the `jev-latest` alias, because the
+thresholds were set against one version. `policy_version()` hashes `policy.py`,
+`state.py` and the case's questions into a short id. `run --log` appends one
+line per decision with the `model` the API reported, that `policy_version`, the
+state that was sent and the outcome; `human_choice` is filled in later from what
+the on-call engineer or the pipeline owner did. `shadow` reports agreement per
+(model, policy_version) pair, so decisions made under different rules never
+share a bucket.
+
+`replay` takes such a log once it is labeled, sends every recorded state again
+through the current model and rules, and lists each decision whose choice or
+outcome changed, with the human label next to it. Run it before moving a
+threshold, editing a criterion or switching model versions:
+
+```
+$ python3 harness.py replay shadow/replay-corpus.jsonl --fail-on-flip   # with CONFIDENCE_FLOOR raised to 0.7
+  FLIP #6 ci-failure (ci-001): outcome: act -> review  [human: credential]
+# replay: 10 decisions, 1 changed
+```
+
+With `--fail-on-flip` it exits 1, which makes it a CI gate: a change that flips
+a recorded decision cannot merge until someone re-records the corpus on
+purpose. `tests/` runs the same check. The corpus shipped here is synthetic,
+recorded with the stub and labeled by hand; yours comes from shadow mode.
 
 ## What the stub is and is not
 

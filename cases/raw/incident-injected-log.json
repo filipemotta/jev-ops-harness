@@ -1,5 +1,5 @@
 {
-  "model": "jev-latest",
+  "model": "jev-1.13.0",
   "policy": "incident-triage",
   "raw_event": {
     "alert": {

@@ -1,4 +1,6 @@
 """Offline tests: answer shapes match the documented API and policies route as intended."""
+import contextlib
+import io
 import json
 import unittest
 from pathlib import Path
@@ -131,3 +133,57 @@ class StateFilterTest(unittest.TestCase):
         self.assertLessEqual(len(state["alert"]["summary"]), MAX_CHARS)
         self.assertLessEqual(len(state["evidence"]["error_signatures"]), MAX_ITEMS)
         self.assertLessEqual(len(state["evidence"]["recent_changes"]), MAX_ITEMS)
+
+
+class VersioningTest(unittest.TestCase):
+    """Rules are versioned with the model, and a replay shows what a change flips."""
+
+    CORPUS = CASES.parent / "shadow" / "replay-corpus.jsonl"
+
+    def test_model_is_pinned_not_an_alias(self):
+        from jevops.client import DEFAULT_MODEL
+        models = {DEFAULT_MODEL} | {json.loads(p.read_text())["model"] for p in CASES.rglob("*.json")}
+        self.assertEqual(models, {"jev-1.13.0"})
+
+    def test_policy_version_is_stable_and_tracks_criteria(self):
+        import copy
+        from jevops.versioning import policy_version
+        questions = load("ci-failure")["questions"]
+        self.assertEqual(policy_version(questions), policy_version(copy.deepcopy(questions)))
+        # Redefining what "runner" means is a policy change, even with the same thresholds.
+        edited = copy.deepcopy(questions)
+        edited["failure_class"]["criteria"]["runner"] += " or a flaky test that passes on retry"
+        self.assertNotEqual(policy_version(questions), policy_version(edited))
+
+    def test_logged_record_carries_model_and_policy_version(self):
+        import tempfile
+        import harness
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / "decisions.jsonl"
+            with contextlib.redirect_stdout(io.StringIO()):
+                harness.run(str(CASES / "ci-failure.json"), live=False, log=str(log))
+            record = json.loads(log.read_text())
+        self.assertEqual(record["model"], "stub-0.1")
+        self.assertRegex(record["policy_version"], r"^[0-9a-f]{12}$")
+        self.assertEqual(record["outcome"], ACT)
+        self.assertIn("state", record)
+        self.assertIsNone(record["human_choice"])
+
+    def test_replay_of_corpus_has_no_flips(self):
+        # Fails when a change to thresholds, state builder or criteria flips a
+        # recorded decision. Re-record the corpus on purpose, in review.
+        import harness
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = harness.replay(str(self.CORPUS), live=False, fail_on_flip=True)
+        self.assertEqual(code, 0, out.getvalue())
+
+    def test_replay_catches_a_threshold_change(self):
+        import harness
+        from unittest import mock
+        out = io.StringIO()
+        with mock.patch("jevops.policy.CONFIDENCE_FLOOR", 0.7), contextlib.redirect_stdout(out):
+            code = harness.replay(str(self.CORPUS), live=False, fail_on_flip=True)
+        self.assertEqual(code, 1)
+        self.assertIn("ci-001", out.getvalue())
+        self.assertIn("outcome: act -> review", out.getvalue())

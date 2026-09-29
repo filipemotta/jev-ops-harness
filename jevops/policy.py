@@ -70,3 +70,10 @@ POLICIES = {
     "ci-failure": ci_failure,
     "action-gate": action_gate,
 }
+
+# The Choice whose pick a human can label afterwards (the team the incident went
+# to, the failure class the owner confirmed). Shadow and replay compare on it.
+PRIMARY_CHOICE = {
+    "incident-triage": "domain",
+    "ci-failure": "failure_class",
+}
